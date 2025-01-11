@@ -26,14 +26,13 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************************/
 
-
 #ifndef _VL53L0X_PLATFORM_LOG_H_
 #define _VL53L0X_PLATFORM_LOG_H_
 
+#include <inttypes.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdint.h>
-#include <inttypes.h>
 
 #include "esp_log.h"
 
@@ -49,60 +48,68 @@ extern "C" {
  * @brief platform log function definition
  */
 
-//#define VL53L0X_LOG_ENABLE 0
+// #define VL53L0X_LOG_ENABLE 0
 
 enum {
-    TRACE_LEVEL_NONE = ESP_LOG_NONE,
-    TRACE_LEVEL_ERRORS = ESP_LOG_ERROR,
-    TRACE_LEVEL_WARNING = ESP_LOG_WARN,
-    TRACE_LEVEL_INFO = ESP_LOG_INFO,
-    TRACE_LEVEL_DEBUG = ESP_LOG_DEBUG,
-    TRACE_LEVEL_ALL = ESP_LOG_VERBOSE,
-    TRACE_LEVEL_IGNORE
+  TRACE_LEVEL_NONE = ESP_LOG_NONE,
+  TRACE_LEVEL_ERRORS = ESP_LOG_ERROR,
+  TRACE_LEVEL_WARNING = ESP_LOG_WARN,
+  TRACE_LEVEL_INFO = ESP_LOG_INFO,
+  TRACE_LEVEL_DEBUG = ESP_LOG_DEBUG,
+  TRACE_LEVEL_ALL = ESP_LOG_VERBOSE,
+  TRACE_LEVEL_IGNORE
 };
 
 enum {
-    TRACE_FUNCTION_NONE = 0,
-    TRACE_FUNCTION_I2C  = 1,
-    TRACE_FUNCTION_ALL  = 0x7fffffff //all bits except sign
+  TRACE_FUNCTION_NONE = 0,
+  TRACE_FUNCTION_I2C = 1,
+  TRACE_FUNCTION_ALL = 0x7fffffff // all bits except sign
 };
 
 enum {
-    TRACE_MODULE_NONE              = 0x0,
-    TRACE_MODULE_API               = 0x1,
-    TRACE_MODULE_PLATFORM          = 0x2,
-    TRACE_MODULE_ALL               = 0x7fffffff //all bits except sign
+  TRACE_MODULE_NONE = 0x0,
+  TRACE_MODULE_API = 0x1,
+  TRACE_MODULE_PLATFORM = 0x2,
+  TRACE_MODULE_ALL = 0x7fffffff // all bits except sign
 };
 
-#define VL53L0X_LOG_ENABLE
+#define VL53L0X_LOG_ENABLE 1
 
 #ifdef VL53L0X_LOG_ENABLE
 
 extern uint32_t _trace_level;
 extern int _modules;
 
-int32_t VL53L0X_trace_config(char *filename, uint32_t modules, uint32_t level, uint32_t functions);
+int32_t VL53L0X_trace_config(char *filename, uint32_t modules, uint32_t level,
+                             uint32_t functions);
 
-#define trace_print_module_function(module, level, function, format, ...) \
-        if (level <= LOG_LOCAL_LEVEL && (module & _modules) != 0) \
-            ESP_LOG_LEVEL(level, "VL53L0X", format, ##__VA_ARGS__)
+#define trace_print_module_function(module, level, function, format, ...)      \
+  if (level <= LOG_LOCAL_LEVEL && (module & _modules) != 0)                    \
+  ESP_LOG_LEVEL(level, "VL53L0X", format, ##__VA_ARGS__)
 
 #define LOG_GET_TIME() esp_log_timestamp()
 
-#define _LOG_FUNCTION_START(module, fmt, ... ) \
-        trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL, "%" PRIu32 " <START> %s "fmt"\n", LOG_GET_TIME(), __FUNCTION__, ##__VA_ARGS__);
+#define _LOG_FUNCTION_START(module, fmt, ...)                                  \
+  trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL,        \
+                              "%" PRIu32 " <START> %s " fmt "\n",              \
+                              LOG_GET_TIME(), __FUNCTION__, ##__VA_ARGS__);
 
-#define _LOG_FUNCTION_END(module, status, ... )\
-        trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL, "%" PRIu32 " <END> %s %d\n", LOG_GET_TIME(), __FUNCTION__, (int)status, ##__VA_ARGS__)
+#define _LOG_FUNCTION_END(module, status, ...)                                 \
+  trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL,        \
+                              "%" PRIu32 " <END> %s %d\n", LOG_GET_TIME(),     \
+                              __FUNCTION__, (int)status, ##__VA_ARGS__)
 
-#define _LOG_FUNCTION_END_FMT(module, status, fmt, ... )\
-        trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL, "%" PRIu32 " <END> %s %d "fmt"\n", LOG_GET_TIME(),  __FUNCTION__, (int)status,##__VA_ARGS__)
+#define _LOG_FUNCTION_END_FMT(module, status, fmt, ...)                        \
+  trace_print_module_function(module, _trace_level, TRACE_FUNCTION_ALL,        \
+                              "%" PRIu32 " <END> %s %d " fmt "\n",             \
+                              LOG_GET_TIME(), __FUNCTION__, (int)status,       \
+                              ##__VA_ARGS__)
 
 #else /* VL53L0X_LOG_ENABLE no logging */
-    #define VL53L0X_ErrLog(...) (void)0
-    #define _LOG_FUNCTION_START(module, fmt, ... ) (void)0
-    #define _LOG_FUNCTION_END(module, status, ... ) (void)0
-    #define _LOG_FUNCTION_END_FMT(module, status, fmt, ... ) (void)0
+#define VL53L0X_ErrLog(...) (void)0
+#define _LOG_FUNCTION_START(module, fmt, ...) (void)0
+#define _LOG_FUNCTION_END(module, status, ...) (void)0
+#define _LOG_FUNCTION_END_FMT(module, status, fmt, ...) (void)0
 #endif /* else */
 
 #define VL53L0X_COPYSTRING(str, ...) strcpy(str, ##__VA_ARGS__)
@@ -111,7 +118,4 @@ int32_t VL53L0X_trace_config(char *filename, uint32_t modules, uint32_t level, u
 }
 #endif
 
-#endif  /* _VL53L0X_PLATFORM_LOG_H_ */
-
-
-
+#endif /* _VL53L0X_PLATFORM_LOG_H_ */

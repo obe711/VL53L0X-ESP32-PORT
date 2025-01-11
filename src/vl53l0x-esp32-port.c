@@ -13,6 +13,8 @@
 
 #define TAG "vl53l0x-esp32-port"
 
+#define LOG_LEVEL_LOCAL ESP_LOG_DEBUG
+
 static VL53L0X_Dev_t VL53L0X_Dev;
 static VL53L0X_Calibration_t VL53L0X_Calibration;
 
@@ -23,39 +25,132 @@ VL53L0X_Error print_pal_error(VL53L0X_Error status, const char *method) {
   return status;
 }
 
+VL53L0X_Error vl53l0x__SetContinuousMode(VL53L0X_DEV Dev) {
+  VL53L0X_Error Status = VL53L0X_SetDeviceMode(
+      Dev,
+      VL53L0X_DEVICEMODE_CONTINUOUS_RANGING); // Setup in single ranging mode
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status, "VL53L0X_SetDeviceMode");
+  }
+  return Status;
+}
+
+VL53L0X_Error
+vl53l0x__SetCalibrationData(VL53L0X_DEV Dev,
+                            VL53L0X_Calibration_t *calibration_data) {
+  VL53L0X_Error status;
+  status = VL53L0X_SetReferenceSpads(Dev, calibration_data->refSpadCount,
+                                     calibration_data->isApertureSpads);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_SetReferenceSpads");
+
+  status = VL53L0X_SetRefCalibration(Dev, calibration_data->pVhvSettings,
+                                     calibration_data->pPhaseCal);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_SetRefCalibration");
+
+  status = VL53L0X_SetOffsetCalibrationDataMicroMeter(
+      Dev, calibration_data->pOffsetMicroMeter);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status,
+                           "VL53L0X_SetOffsetCalibrationDataMicroMeter");
+
+  status = VL53L0X_SetXTalkCompensationRateMegaCps(
+      Dev, calibration_data->pXTalkCompensationRateMegaCps);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_SetXTalkCompensationRateMegaCps");
+
+  status = VL53L0X_SetXTalkCompensationEnable(Dev, 1);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_SetXTalkCompensationEnable");
+
+  return status;
+};
+
+VL53L0X_Error vl53l0x__OffsetCalibrate(VL53L0X_DEV Dev,
+                                       VL53L0X_Calibration_t *calibration_data,
+                                       uint32_t CalDistanceMilliMeter) {
+  VL53L0X_Error status;
+  // Offset calibration (~300ms) // After Set white target
+  // Recommendation is to use a white (88%reflectance) target at 100mm, in a
+  // dark environment.
+  status = VL53L0X_PerformOffsetCalibration(
+      Dev, (FixPoint1616_t)CalDistanceMilliMeter,
+      &calibration_data->pOffsetMicroMeter);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_PerformOffsetCalibration");
+  ESP_LOGI(TAG, "Offset calibration data: pOffsetMicroMeter = %" PRIi32 "\n",
+           calibration_data->pOffsetMicroMeter);
+
+  return status;
+};
+
+VL53L0X_Error vl53l0x__XTalkCalibrate(VL53L0X_DEV Dev,
+                                      VL53L0X_Calibration_t *calibration_data,
+                                      uint32_t XTalkCalDistance) {
+  VL53L0X_Error status;
+  // CrossTalk calibration (~1sec) // After Set grey target
+  // Use a grey 17% reflectance target.  - Recomended
+  status = VL53L0X_PerformXTalkCalibration(
+      Dev, (FixPoint1616_t)XTalkCalDistance,
+      &calibration_data->pXTalkCompensationRateMegaCps);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_PerformXTalkCalibration");
+  ESP_LOGI(
+      TAG,
+      "CrossTalk calibration data: pXTalkCompensationRateMegaCps = %" PRIu32
+      "\n",
+      calibration_data->pXTalkCompensationRateMegaCps);
+
+  return status;
+};
+
+VL53L0X_Error
+vl53l0x__ManufacturingCalibrate(VL53L0X_DEV Dev,
+                                VL53L0X_Calibration_t *calibration_data) {
+  VL53L0X_Error status;
+
+  // SPADs calibration (~10ms)
+  status = VL53L0X_PerformRefSpadManagement(
+      Dev, &calibration_data->refSpadCount, &calibration_data->isApertureSpads);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_PerformRefSpadManagement");
+  ESP_LOGI(TAG,
+           "SPADs calibration data: refSpadCount = %" PRIu32
+           ", isApertureSpads = %" PRIu8 "\n",
+           calibration_data->refSpadCount, calibration_data->isApertureSpads);
+
+  // Temperature calibration (~40ms)
+  status = VL53L0X_PerformRefCalibration(Dev, &calibration_data->pVhvSettings,
+                                         &calibration_data->pPhaseCal);
+  if (status != VL53L0X_ERROR_NONE)
+    return print_pal_error(status, "VL53L0X_PerformRefSpadManagement");
+  ESP_LOGI(TAG,
+           "Temperature calibration data: pVhvSettings = %" PRIu8
+           ", pPhaseCal = %" PRIu8 "\n",
+           calibration_data->pVhvSettings, calibration_data->pPhaseCal);
+
+  return status;
+}
+
 VL53L0X_Error init_vl53l0x(VL53L0X_Dev_t *pDevice) {
   VL53L0X_Error status;
-  uint8_t isApertureSpads;
-  uint8_t PhaseCal;
-  uint32_t refSpadCount;
-  uint8_t VhvSettings;
+
   // Device Initialization (~40ms)
   status = VL53L0X_DataInit(pDevice);
   if (status != VL53L0X_ERROR_NONE)
     return print_pal_error(status, "VL53L0X_DataInit");
+
+  // Static Initialization
   status = VL53L0X_StaticInit(pDevice);
   if (status != VL53L0X_ERROR_NONE)
     return print_pal_error(status, "VL53L0X_StaticInit");
-  // SPADs calibration (~10ms)
-  status = VL53L0X_PerformRefSpadManagement(pDevice, &refSpadCount,
-                                            &isApertureSpads);
-  ESP_LOGD(TAG, "refSpadCount = %" PRIu32 ", isApertureSpads = %" PRIu8 "\n",
-           refSpadCount, isApertureSpads);
-  if (status != VL53L0X_ERROR_NONE)
-    return print_pal_error(status, "VL53L0X_PerformRefSpadManagement");
-  // Temperature calibration (~40ms)
-  status = VL53L0X_PerformRefCalibration(pDevice, &VhvSettings, &PhaseCal);
-  if (status != VL53L0X_ERROR_NONE)
-    return print_pal_error(status, "VL53L0X_PerformRefCalibration");
-  // Setup in single ranging mode
-  status = VL53L0X_SetDeviceMode(pDevice, VL53L0X_DEVICEMODE_SINGLE_RANGING);
-  if (status != VL53L0X_ERROR_NONE)
-    return print_pal_error(status, "VL53L0X_SetDeviceMode");
-  // end
+
   return status;
 }
 
 VL53L0X_DEV vl53l0x__CreateDevice(i2c_port_t i2c_port) {
+  esp_log_level_set(TAG, LOG_LEVEL_LOCAL);
   VL53L0X_Dev.i2c_address = VL53l0X_DEFAULT_I2C_ADDRESS;
   VL53L0X_Dev.i2c_port_num = i2c_port;
   return &VL53L0X_Dev;
@@ -116,11 +211,12 @@ VL53L0X_Error vl53l0x__WaitStopCompleted(VL53L0X_DEV Dev) {
   return Status;
 }
 
+// // // // <------ DO not use vl53l0x__Calibrate
 VL53L0X_Error vl53l0x__Calibrate(VL53L0X_DEV Dev) {
   VL53L0X_Error Status = VL53L0X_ERROR_NONE;
   Status = VL53L0X_PerformRefCalibration(
-      Dev, &VL53L0X_Calibration.VhvSettings,
-      &VL53L0X_Calibration.PhaseCal); // Device Initialization
+      Dev, &VL53L0X_Calibration.pVhvSettings,
+      &VL53L0X_Calibration.pPhaseCal); // Device Initialization
 
   if (Status != VL53L0X_ERROR_NONE) {
     return print_pal_error(Status, "VL53L0X_PerformRefCalibration");
@@ -139,6 +235,8 @@ VL53L0X_Error vl53l0x__Calibrate(VL53L0X_DEV Dev) {
 VL53L0X_Error vl53l0x__InitializeDriver(VL53L0X_DEV Dev,
                                         VL53L0X_VERSION Version,
                                         VL53L0X_DEVICE_INFO DeviceInfo) {
+
+  ESP_LOGI(TAG, "vl53l0x__InitializeDriver");
 
   VL53L0X_Error Status = init_vl53l0x(Dev);
   if (Status != VL53L0X_ERROR_NONE) {
@@ -160,17 +258,6 @@ VL53L0X_Error vl53l0x__InitializeDriver(VL53L0X_DEV Dev,
     return print_pal_error(Status, "VL53L0X_StaticInit");
   }
 
-  Status = vl53l0x__Calibrate(Dev);
-  if (Status != VL53L0X_ERROR_NONE) {
-    return print_pal_error(Status, "vl53l0x__Calibrate");
-  }
-
-  Status = VL53L0X_SetDeviceMode(
-      Dev,
-      VL53L0X_DEVICEMODE_CONTINUOUS_RANGING); // Setup in single ranging mode
-  if (Status != VL53L0X_ERROR_NONE) {
-    return print_pal_error(Status, "VL53L0X_SetDeviceMode");
-  }
   return Status;
 };
 
@@ -226,3 +313,39 @@ VL53L0X_Error vl53l0x__Clear(VL53L0X_DEV Dev) {
   }
   return Status;
 };
+
+///////////////////////////
+VL53L0X_Error
+vl53l0x__read_calibration(VL53L0X_DEV Dev,
+                          VL53L0X_Calibration_t *calibration_data) {
+  // ReferenceSpads
+  VL53L0X_Error Status = VL53L0X_GetReferenceSpads(
+      Dev, &calibration_data->refSpadCount, &calibration_data->isApertureSpads);
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status, "VL53L0X_GetReferenceSpads");
+  }
+
+  // Temp
+  Status = VL53L0X_GetRefCalibration(Dev, &calibration_data->pVhvSettings,
+                                     &calibration_data->pPhaseCal);
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status, "VL53L0X_GetRefCalibration");
+  }
+
+  // Offset
+  Status = VL53L0X_GetOffsetCalibrationDataMicroMeter(
+      Dev, &calibration_data->pOffsetMicroMeter);
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status,
+                           "VL53L0X_GetOffsetCalibrationDataMicroMeter");
+  }
+
+  // XTalk
+  Status = VL53L0X_GetXTalkCompensationRateMegaCps(
+      Dev, &calibration_data->pXTalkCompensationRateMegaCps);
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status, "VL53L0X_GetXTalkCompensationRateMegaCps");
+  }
+
+  return Status;
+}
