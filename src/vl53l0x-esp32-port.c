@@ -35,6 +35,16 @@ VL53L0X_Error vl53l0x__SetContinuousMode(VL53L0X_DEV Dev) {
   return Status;
 }
 
+VL53L0X_Error vl53l0x__SetSingleRangeMode(VL53L0X_DEV Dev) {
+  VL53L0X_Error Status = VL53L0X_SetDeviceMode(
+      Dev,
+      VL53L0X_DEVICEMODE_SINGLE_RANGING); // Setup in single ranging mode
+  if (Status != VL53L0X_ERROR_NONE) {
+    return print_pal_error(Status, "VL53L0X_SetDeviceMode");
+  }
+  return Status;
+}
+
 VL53L0X_Error
 vl53l0x__SetCalibrationData(VL53L0X_DEV Dev,
                             VL53L0X_Calibration_t *calibration_data) {

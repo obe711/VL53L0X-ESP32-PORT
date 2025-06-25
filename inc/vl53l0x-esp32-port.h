@@ -71,6 +71,8 @@ vl53l0x__SetCalibrationData(VL53L0X_DEV Dev,
 
 VL53L0X_Error vl53l0x__SetContinuousMode(VL53L0X_DEV Dev);
 
+VL53L0X_Error vl53l0x__SetSingleRangeMode(VL53L0X_DEV Dev);
+
 VL53L0X_Error
 vl53l0x__read_calibration(VL53L0X_DEV Dev,
                           VL53L0X_Calibration_t *calibration_data);
